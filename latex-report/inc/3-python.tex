@@ -1,0 +1,206 @@
+\chapter{Реализация на языке Python}
+
+В данном разделе разобран пример решения задачи на языке Python. Полный текст
+программы приведен в приложении \ref{app:program}.
+
+\section{Используемые библиотеки}
+Для токенизации по предложениям используется библиотека \emph{nltk}.
+
+Для выделения термов используется библиотека \emph{rutermextract}
+\cite{rutermextract}. Она использует регулярные выражения для разбора по словам
+и \emph{pymorphy2} в качестве морфологического анализатора. \emph{pymorphy2}
+\cite{Korobov}, в свою очередь, использует морфологический корпус OpenCorpora
+для определения части речи и нормальной формы слова.
+
+На рисунке \ref{fig:import-code} показан импорт необходимых функций.
+
+\begin{codewrap}[0.5]
+\begin{minted}[fontsize=\footnotesize]{python}
+from nltk import sent_tokenize
+from rtm.rutermextract import TermExtractor
+import re
+from latex import escape
+\end{minted}
+\caption{}\label{fig:import-code}
+\end{codewrap}
+
+В данном случае используется \emph{sent_tokenize} для токенизации по
+предложениям, модифицированная версия \emph{TermExtractor}, которая не
+сортирует термы каким либо образом, стандартная библиотека регулярных выражений
+\emph{re} и функция \emph{escape}, экранирующая названия вставляемых в макросы
+изображений.
+
+\section{Разбиение текста}
+
+Код функций для преобразования текста на уровне параграфов показан на рисунке
+\ref{fig:transform-par}.
+
+\begin{codewrap}[1]
+\begin{minted}[fontsize=\footnotesize]{python}
+def handle_text(text):
+    try:
+        return "\n".join(transform_paragraph(p) for p in text.split("\n"))
+    finally:
+        close_downloader()
+
+
+def transform_paragraph(p):
+    image_pars = ""
+    output_text = ""
+
+    for sent in sent_tokenize(p, 'russian'):
+        new_sent, latex = transform_sent(sent)
+        output_text += new_sent + " "
+        if latex:
+            image_pars += "\n" + latex
+
+    return output_text + image_pars
+\end{minted}
+\caption{}\label{fig:transform-par}
+\end{codewrap}
+
+Функция \emph{transform_paragraph} разбивает параграф на отдельные предложения и
+обрабатывает каждое из них через \emph{transform_sent}, которая также возвращает
+код макроса для вставки изображения. Полученные макросы впоследствии добавляются
+в конец преобразованного параграфа.
+
+\section{Анализ предложений}
+
+На рисунке \ref{fig:transform-sent} показан код функции \emph{transform_sent},
+анализирующей предложение и возвращающей его преобразованный вариант вместе с
+кодом для вставки рисунка, если ссылка на него была обнаружена в предложении.
+
+\begin{codewrap}[0.85]
+\begin{minted}[fontsize=\footnotesize]{python}
+def terms_contain_trigger(sent_terms):
+    for term in sent_terms:
+        if "рисунок" in term.normalized:
+            return True
+    return False
+
+
+unique_idx = 0
+term_extractor = TermExtractor()
+
+
+def transform_sent(sent):
+    global unique_idx
+    sent_terms = term_extractor(sent)
+    if len(sent_terms) < 2 or not terms_contain_trigger(sent_terms):
+        return sent, None
+
+    img_file = "image%s" % str(unique_idx)
+    unique_idx += 1
+
+    context = extract_context(sent_terms)
+
+    tex_text = create_tex_image(context, img_file)
+    download_image(context, img_file)
+
+    img_ref = "fig:%s" % img_file
+    return insert_ref(sent, img_ref), tex_text
+\end{minted}
+\caption{}\label{fig:transform-sent}
+\end{codewrap}
+
+Термы извлекаются при помощи экземпляра \emph{TermExtractor}, после чего
+проводится извлечение описания рисунка с использованием \emph{extract_context},
+код которой приведен на рисунке \ref{fig:extract-context}.
+
+\begin{codewrap}[0.75]
+\begin{minted}[fontsize=\footnotesize]{python}
+def extract_context(sent_terms):
+    if "рисунок" in sent_terms[0].normalized:
+        return sent_terms[1].normalized
+
+    for i in range(1, len(sent_terms)):
+        if "рисунок" in sent_terms[i].normalized:
+            return sent_terms[i - 1].normalized
+\end{minted}
+\caption{}\label{fig:extract-context}
+\end{codewrap}
+
+Для создания макроса вставки используется \emph{create_tex_image}, создающая
+подпись вида <<Рисунок 1 - <context> >>. Ее код показан на рисунке
+\ref{fig:create-tex-image}.
+
+\begin{codewrap}[1]
+\begin{minted}[fontsize=\footnotesize]{python}
+def create_tex_image(context, img_file):
+    return "\\insertimage{%s}{%s}" % (escape(img_file), context.capitalize())
+\end{minted}
+\caption{}\label{fig:create-tex-image}
+\end{codewrap}
+
+Каждому файлу присваивается уникальное имя вида \emph{image<index>}. Затем
+производится поиск и сохранение файла изображения с указанным именем с
+использованием \emph{download_image}. Последним этапом является вставка ссылок
+на рисунки при помощи функции \emph{insert_ref}, код которой приведен на рисунке
+\ref{fig:insert-ref}.
+
+\begin{codewrap}[0.75]
+\begin{minted}[fontsize=\footnotesize]{python}
+def insert_ref(sent, img_ref):
+    match = re.search(r"(рисун(ок|ке|ка))", sent, re.IGNORECASE)
+    return sent[:match.end(0)] + " \\ref{%s}" % escape(img_ref) +
+            sent[match.end(0):]
+\end{minted}
+\caption{}\label{fig:insert-ref}
+\end{codewrap}
+
+\section{Поиск и загрузка изображений}
+
+Для загрузки изображений используется библиотека \emph{yandex-images}. Эта
+библиотека использует веб-драйвер - приложение, позволяющее запускать экземпляр
+браузера и осуществлять все операции с поиском и загрузкой файлов через него.
+
+Код, используемый для загрузки изображений, приведен на рисунке
+\ref{fig:download-image}.
+
+\begin{codewrap}[0.75]
+\begin{minted}[fontsize=\footnotesize]{python}
+disable_dwnld = False
+if not disable_dwnld:
+    from yaimages.yandex_images_download.downloader
+        import YandexImagesDownloader
+    downloader = YandexImagesDownloader(output_directory="images/")
+
+
+def download_image(context, img_file):
+    if disable_dwnld:
+        return
+    downloader.download_images_by_keyword(context, img_file)
+
+
+def close_downloader():
+    if disable_dwnld:
+        return
+    downloader.driver.quit()
+\end{minted}
+\caption{}\label{fig:download-image}
+\end{codewrap}
+
+При сборке конечного документа при помощи LaTeX необходимо указать в преамбуле
+путь к изображениям. Также загружаемые из Интернета приложения в большинсте
+случаев будут иметь формат PNG или JPEG, поэтому необходимо использовать
+соответствующие пакеты, позволяющие добавить их в документ. При этом необходимо
+создать реализацию макроса \emph{\\insertimage}.
+
+\section{Использование программмы}
+
+Код для запуска программы приведен на рисунке \ref{fig:run-python}.
+
+\begin{codewrap}[0.65]
+\begin{minted}[fontsize=\footnotesize]{python}
+with open('input.txt', encoding="utf8") as f:
+    text = handle_text(f.read())
+    print(text)
+    with open('output.tex', encoding="utf8", mode="w") as f:
+        f.write(text)
+\end{minted}
+\caption{}\label{fig:run-python}
+\end{codewrap}
+
+Исходный текст подается должен находиться в файле \emph{input.txt}. Для сборки
+документа в формате PDF достаточно объединить команды запуска программы и сборки
+в цепь: \emph{python source.py \&\& latex output.tex}.

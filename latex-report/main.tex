@@ -1,0 +1,28 @@
+\input{lib/style.tex}
+\input{lib/macro.tex}
+
+\usepackage[outputdir=build]{minted}
+\usemintedstyle{bw}
+
+\makeatletter
+\AtBeginEnvironment{minted}{\dontdofcolorbox}
+\def\dontdofcolorbox{\renewcommand\fcolorbox[4][]{##4}}
+\makeatother
+
+\addbibresource{refs.bib}
+
+% \includeonly{inc/2-theory}
+% \includeonly{inc/3-python}
+\begin{document}
+\include{title}
+\setcounter{page}{2}
+\tableofcontents
+
+\include{inc/1-intro}
+\include{inc/2-theory}
+\include{inc/3-python}
+\include{inc/4-conclusion}
+\sources
+\include{inc/5-apps}
+
+\end{document}

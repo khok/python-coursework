@@ -1,0 +1,25 @@
+% Опциональные фишки, которые можно добавить в свой main.tex:
+
+% Отключаем переносы, если они вам не нравятся, или нужно растянуть объем :)
+\tolerance=1
+\emergencystretch=\maxdimen
+\hyphenpenalty=10000
+\hbadness=10000
+
+% Математика:
+\usepackage{amsmath,amsthm,amssymb,breqn}
+
+% Путь к картинкам
+\graphicspath{{images/}}
+
+% Путь к файлам input
+\makeatletter\def\input@path{{inc/}}\makeatother
+
+% Файл с источниками
+\addbibresource{refs.bib}
+
+%Название файла, над которым сейчас работаете
+\includeonly{1-Intro}
+
+% Оформление приложений (уже не понадобится).
+% \usepackage[titletoc,title]{appendix}
